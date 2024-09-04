@@ -72,7 +72,15 @@ class User(BaseModel):
     user_email: str = Field(pattern=r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,7}\b',
                             examples=['foo@bar.com'])
     age: int | None = Field(None)
-    recomendations: str
+    recomendations: list[str]
+
+@dataclass
+class UserReturn(BaseModel):
+    user_name: str
+    user_id: int
+    user_email: str
+    age: int | None
+    recomendations: list[str]
 
 @app.get("/")
 def read_api(db: Session = Depends(get_db), api_key: str = Depends(get_api_key)): # pylint: disable=unused-argument
@@ -89,7 +97,7 @@ def read_api(db: Session = Depends(get_db), api_key: str = Depends(get_api_key))
 
 @app.get("/user/{user_id}")
 def find_user(user_id: int, db: Session = Depends(get_db),
-              api_key: str = Depends(get_api_key)) -> User: # pylint: disable=unused-argument
+              api_key: str = Depends(get_api_key)) -> UserReturn: # pylint: disable=unused-argument
     '''_summary_
 
     Args:
@@ -98,10 +106,21 @@ def find_user(user_id: int, db: Session = Depends(get_db),
     Returns:
         _type_: _description_
     '''
-    return db.query(models.Users).filter(models.Users.user_id == user_id).first()
+    user_model = db.query(models.Users).filter(models.Users.user_id == user_id).first()
+
+    if user_model is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"ID {user_id} : not found"
+        )
+
+    user = UserReturn(user_id = user_model.user_id, user_name=user_model.user_name,
+                      age = user_model.age, user_email=user_model.user_email,
+                      recomendations = pickle.loads(user_model.recomendations))
+    return user
 
 @app.post("/create")
-def create_user(user: User, ZIP: UploadFile, db: Session = Depends(get_db),
+def create_user(user: User, db: Session = Depends(get_db),
                 api_key: str = Depends(get_api_key)) -> User: # pylint: disable=unused-argument
     '''_summary_
 
@@ -119,25 +138,25 @@ def create_user(user: User, ZIP: UploadFile, db: Session = Depends(get_db),
     '''
     user_model = db.query(models.Users).filter(models.Users.user_email == user.user_email).first()
 
-    if user_model is None:
+    if user_model is not None:
         raise HTTPException(
             status_code=400,
             detail=f"Email {user.user_email} : Already in records"
         )
-    if ZIP.content_type != 'application/zip':
-        raise HTTPException(400, detail="Invalid file type")
+    # if ZIP.content_type != 'application/zip':
+    #     raise HTTPException(400, detail="Invalid file type")
 
     user_model = models.Users()
     user_model.user_name = user.user_name # type: ignore
     user_model.user_email = user.user_email # type: ignore
     user_model.age = user.age # type: ignore
     user_model.recomendations = pickle.dumps(user.recomendations) # type: ignore
-    user_model.ZIP = pickle.dumps(ZIP) # type: ignore
+    # user_model.ZIP = pickle.dumps(ZIP) # type: ignore
 
     db.add(user_model)
     db.commit()
 
-    return user
+    return user_model
 
 @app.put("/update/{user_id}")
 def update_user(user_id: int, ZIP: UploadFile, user: User, db: Session = Depends(get_db),
