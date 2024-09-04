@@ -20,5 +20,5 @@ class Users(Base):
     user_name = Column(String)
     user_email = Column(String)
     age = Column(Integer, nullable = True)
-    recomendations = Column(PickleType)
-    ZIP = Column(PickleType, nullable = True)
+    recomendations = Column(String)
+    ZIP = Column(String, nullable = True)

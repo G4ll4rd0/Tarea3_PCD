@@ -72,15 +72,22 @@ class User(BaseModel):
     user_email: str = Field(pattern=r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,7}\b',
                             examples=['foo@bar.com'])
     age: int | None = Field(None)
-    recomendations: list[str]
+    recomendations: str
+    zip_code: str | None = Field(None, min_length=5, max_length=5)
 
 @dataclass
 class UserReturn(BaseModel):
+    '''_summary_
+
+    Args:
+        BaseModel (_type_): _description_
+    '''
     user_name: str
     user_id: int
     user_email: str
     age: int | None
-    recomendations: list[str]
+    recomendations: str
+    zip_code: str
 
 @app.get("/")
 def read_api(db: Session = Depends(get_db), api_key: str = Depends(get_api_key)): # pylint: disable=unused-argument
@@ -116,7 +123,8 @@ def find_user(user_id: int, db: Session = Depends(get_db),
 
     user = UserReturn(user_id = user_model.user_id, user_name=user_model.user_name,
                       age = user_model.age, user_email=user_model.user_email,
-                      recomendations = pickle.loads(user_model.recomendations))
+                      recomendations = user_model.recomendations,
+                      zip_code = user_model.ZIP)
     return user
 
 @app.post("/create")
@@ -136,22 +144,20 @@ def create_user(user: User, db: Session = Depends(get_db),
     Returns:
         User: _description_
     '''
-    user_model = db.query(models.Users).filter(models.Users.user_email == user.user_email).first()
+    user_used = db.query(models.Users).filter(models.Users.user_email == user.user_email).first()
 
-    if user_model is not None:
+    if user_used is not None:
         raise HTTPException(
             status_code=400,
             detail=f"Email {user.user_email} : Already in records"
         )
-    # if ZIP.content_type != 'application/zip':
-    #     raise HTTPException(400, detail="Invalid file type")
 
     user_model = models.Users()
     user_model.user_name = user.user_name # type: ignore
     user_model.user_email = user.user_email # type: ignore
     user_model.age = user.age # type: ignore
-    user_model.recomendations = pickle.dumps(user.recomendations) # type: ignore
-    # user_model.ZIP = pickle.dumps(ZIP) # type: ignore
+    user_model.recomendations = user.recomendations # type: ignore
+    user_model.ZIP = user.zip_code # type: ignore
 
     db.add(user_model)
     db.commit()
@@ -159,7 +165,7 @@ def create_user(user: User, db: Session = Depends(get_db),
     return user_model
 
 @app.put("/update/{user_id}")
-def update_user(user_id: int, ZIP: UploadFile, user: User, db: Session = Depends(get_db),
+def update_user(user_id: int, user: User, db: Session = Depends(get_db),
                 api_key: str = Depends(get_api_key)) -> User: # pylint: disable=unused-argument
     '''_summary_
 
@@ -184,14 +190,12 @@ def update_user(user_id: int, ZIP: UploadFile, user: User, db: Session = Depends
             status_code=404,
             detail=f"ID {user_id} : Does not exist"
         )
-    if ZIP.content_type != 'application/zip':
-        raise HTTPException(400, detail="Invalid file type")
 
     user_model.user_name = user.user_name # type: ignore
     user_model.user_email = user.user_email # type: ignore
     user_model.age = user.age # type: ignore
-    user_model.recomendations = pickle.dumps(user.recomendations) # type: ignore
-    user_model.ZIP = pickle.dumps(ZIP) # type: ignore
+    user_model.recomendations = puser.recomendations # type: ignore
+    user_model.ZIP = user.zip_code # type: ignore
 
     db.add(user_id)
     db.commit()
